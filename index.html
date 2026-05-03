@@ -408,9 +408,9 @@ document.getElementById('alignReset').addEventListener('click', () => {
 
 // ── Init ──────────────────────────────────────────────────────
 applyAlign();
-enableReveal(true);
+window.addEventListener('load', () => enableReveal(true));
 window.addEventListener('resize', () => {
-  if (revealActive) setRevealX(vp.clientWidth/2);
+  if (revealActive) setRevealX(vp.clientWidth / 2);
 });
 </script>
 </body>

@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Haifa — Historical vs Modern</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background:#111;
+  color:#eee;
+  font-family:system-ui,sans-serif;
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+
+/* ── Top bar ── */
+#bar {
+  background:#1e1e1e;
+  border-bottom:1px solid #444;
+  padding:8px 14px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-shrink:0;
+  flex-wrap:wrap;
+}
+
+.btn {
+  padding:6px 13px;
+  border-radius:6px;
+  border:1px solid #555;
+  background:#333;
+  color:#eee;
+  cursor:pointer;
+  font-size:12px;
+  white-space:nowrap;
+  transition:background .12s,border-color .12s;
+}
+.btn:hover { background:#444; }
+.btn.on { background:#1a5f8a; border-color:#6af; }
+
+#hint { font-size:11px; color:#666; margin-left:auto; }
+
+/* ── Viewport ── */
+#vp {
+  flex:1;
+  position:relative;
+  overflow:hidden;
+  cursor:grab;
+  user-select:none;
+}
+#vp.grabbing { cursor:grabbing; }
+
+/* Modern layer — always full */
+#world-new {
+  position:absolute;
+  top:0;left:0;
+  transform-origin:0 0;
+}
+
+/* Historical layer — clipped to left of reveal line */
+#hist-clip {
+  position:absolute;
+  top:0;left:0;
+  height:100%;
+  overflow:hidden;
+  pointer-events:none;
+}
+#world-hist {
+  position:absolute;
+  top:0;left:0;
+  transform-origin:0 0;
+}
+
+/* ── Reveal handle ── */
+#reveal-line {
+  position:absolute;
+  top:0;
+  width:3px;
+  height:100%;
+  background:#fff;
+  cursor:ew-resize;
+  z-index:50;
+  box-shadow:0 0 8px rgba(0,0,0,.8);
+  display:none;
+}
+#reveal-grip {
+  position:absolute;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  width:36px;height:36px;
+  border-radius:50%;
+  background:#fff;
+  border:2px solid #aaa;
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;
+  color:#333;
+  pointer-events:none;
+  box-shadow:0 2px 8px rgba(0,0,0,.5);
+  white-space:nowrap;
+}
+
+.era-tag {
+  position:absolute;
+  top:12px;
+  background:rgba(0,0,0,.6);
+  color:#fff;
+  font-size:12px;
+  padding:4px 10px;
+  border-radius:20px;
+  pointer-events:none;
+  z-index:40;
+  display:none;
+}
+#tag-hist { left:12px; }
+#tag-new  { right:12px; }
+
+/* ── Alignment panel ── */
+#align-panel {
+  position:absolute;
+  bottom:16px; right:16px;
+  background:rgba(20,20,20,.92);
+  border:1px solid #555;
+  border-radius:10px;
+  padding:14px 16px;
+  z-index:60;
+  display:none;
+  min-width:240px;
+}
+#align-panel h3 {
+  font-size:12px;
+  color:#aaa;
+  margin-bottom:10px;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+.arow {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:8px;
+}
+.arow label { font-size:11px; color:#bbb; width:50px; }
+.arow input[type=range] { flex:1; accent-color:#6af; }
+.arow .av { font-size:11px; color:#888; width:42px; text-align:right; }
+.align-reset { margin-top:4px; font-size:11px; padding:4px 10px; }
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <button class="btn on" id="btnReveal">◀ Reveal ▶</button>
+  <button class="btn on" id="btnLabels">Labels On</button>
+  <button class="btn"    id="btnReset">Reset View</button>
+  <span id="hint">Scroll to zoom · Drag to pan · Drag the line to reveal</span>
+</div>
+
+<div id="vp">
+
+  <!-- Modern (right side) -->
+  <div id="world-new">
+    <img id="img-new" src="685235443_10165044146513523_2363287948497542752_n.jpg"
+         style="display:block;max-width:none;">
+  </div>
+
+  <!-- Historical (left side, clipped) -->
+  <div id="hist-clip">
+    <div id="world-hist">
+      <!-- alignment wrapper — transform set by align panel -->
+      <div id="hist-align" style="position:absolute;top:0;left:0;transform-origin:0 0;">
+        <img id="img-old"    src="hist_old_aligned.jpg"
+             style="display:block;max-width:none;position:absolute;top:0;left:0;">
+        <img id="img-labels" src="hist_lbl_aligned.jpg"
+             style="display:block;max-width:none;position:absolute;top:0;left:0;">
+      </div>
+    </div>
+  </div>
+
+  <div id="reveal-line">
+    <div id="reveal-grip">◀▶</div>
+  </div>
+
+  <div class="era-tag" id="tag-hist">Historical</div>
+  <div class="era-tag" id="tag-new">Modern</div>
+
+  <!-- Alignment panel -->
+  <div id="align-panel">
+    <h3>Historical alignment</h3>
+    <div class="arow">
+      <label>Offset X</label>
+      <input type="range" id="aX" min="-600" max="600" value="0">
+      <span class="av" id="aXv">0 px</span>
+    </div>
+    <div class="arow">
+      <label>Offset Y</label>
+      <input type="range" id="aY" min="-400" max="400" value="0">
+      <span class="av" id="aYv">0 px</span>
+    </div>
+    <div class="arow">
+      <label>Scale</label>
+      <input type="range" id="aS" min="50" max="150" value="79" step="0.5">
+      <span class="av" id="aSv">79%</span>
+    </div>
+    <div class="arow">
+      <label>Rotate</label>
+      <input type="range" id="aR" min="-15" max="15" value="0" step="0.1">
+      <span class="av" id="aRv">0°</span>
+    </div>
+    <button class="btn align-reset" id="alignReset">Reset alignment</button>
+  </div>
+
+</div>
+
+<script>
+// ── Elements ──────────────────────────────────────────────────
+const vp         = document.getElementById('vp');
+const worldNew   = document.getElementById('world-new');
+const histClip   = document.getElementById('hist-clip');
+const worldHist  = document.getElementById('world-hist');
+const histAlign  = document.getElementById('hist-align');
+const imgNew     = document.getElementById('img-new');
+const imgOld     = document.getElementById('img-old');
+const imgLabels  = document.getElementById('img-labels');
+const revealLine = document.getElementById('reveal-line');
+const tagHist    = document.getElementById('tag-hist');
+const tagNew     = document.getElementById('tag-new');
+const alignPanel = document.getElementById('align-panel');
+
+// ── Alignment state (applied to hist-align inside world-hist) ─
+let align = { x:0, y:0, s:79, r:0 };
+
+function applyAlign() {
+  const { x, y, s, r } = align;
+  histAlign.style.transform =
+    `translate(${x}px,${y}px) scale(${s/100}) rotate(${r}deg)`;
+}
+
+// ── Pan/zoom state ────────────────────────────────────────────
+let scale=1, tx=0, ty=0;
+
+function setTransform(s, x, y) {
+  scale = Math.max(0.04, Math.min(20, s));
+  tx = x; ty = y;
+  const t = `translate(${tx}px,${ty}px) scale(${scale})`;
+  worldNew.style.transform  = t;
+  worldHist.style.transform = t;
+}
+
+function fitView() {
+  const vw = vp.clientWidth;
+  const vh = vp.clientHeight;
+  const iw = imgNew.naturalWidth  || 1247;
+  const ih = imgNew.naturalHeight || 804;
+  const s  = Math.min(vw/iw, vh/ih) * 0.95;
+  setTransform(s, (vw - iw*s)/2, (vh - ih*s)/2);
+}
+
+imgNew.addEventListener('load', fitView);
+if (imgNew.complete && imgNew.naturalWidth) fitView();
+
+// ── Reveal slider position ────────────────────────────────────
+let revealX = 0;
+let revealActive = true;
+
+function setRevealX(x) {
+  revealX = Math.max(0, Math.min(vp.clientWidth, x));
+  revealLine.style.left = revealX + 'px';
+  histClip.style.width  = revealX + 'px';
+  histClip.style.height = '100%';
+  // Position tags
+  tagHist.style.left  = Math.max(8, revealX/2 - 40) + 'px';
+  tagNew.style.right  = Math.max(8, (vp.clientWidth - revealX)/2 - 30) + 'px';
+}
+
+function enableReveal(on) {
+  revealActive = on;
+  revealLine.style.display  = on ? 'block' : 'none';
+  tagHist.style.display     = on ? 'block' : 'none';
+  tagNew.style.display      = on ? 'block' : 'none';
+  histClip.style.width      = on ? revealX + 'px' : '100%';
+  document.getElementById('btnReveal').classList.toggle('on', on);
+  if (on) setRevealX(revealX || vp.clientWidth/2);
+}
+
+// ── Mouse wheel zoom ──────────────────────────────────────────
+vp.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = vp.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const f  = e.deltaY < 0 ? 1.12 : 1/1.12;
+  setTransform(scale*f, mx-(mx-tx)*f, my-(my-ty)*f);
+}, { passive:false });
+
+// ── Mouse drag (pan vs reveal) ────────────────────────────────
+let dragging       = false;
+let draggingReveal = false;
+let dragStartX, dragStartY, dragTx, dragTy;
+
+vp.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  const lineRect = revealLine.getBoundingClientRect();
+  if (revealActive && Math.abs(e.clientX - lineRect.left) < 16) {
+    draggingReveal = true;
+    e.preventDefault();
+    return;
+  }
+  dragging = true;
+  dragStartX = e.clientX; dragStartY = e.clientY;
+  dragTx = tx; dragTy = ty;
+  vp.classList.add('grabbing');
+});
+
+window.addEventListener('mousemove', e => {
+  if (draggingReveal) {
+    const rect = vp.getBoundingClientRect();
+    setRevealX(e.clientX - rect.left);
+    return;
+  }
+  if (!dragging) return;
+  setTransform(scale, dragTx + e.clientX - dragStartX, dragTy + e.clientY - dragStartY);
+});
+
+window.addEventListener('mouseup', () => {
+  dragging = false;
+  draggingReveal = false;
+  vp.classList.remove('grabbing');
+});
+
+// ── Touch ─────────────────────────────────────────────────────
+let t0=[], touchReveal=false;
+vp.addEventListener('touchstart', e => {
+  t0 = Array.from(e.touches);
+  const lineRect = revealLine.getBoundingClientRect();
+  touchReveal = revealActive && t0.length===1 &&
+    Math.abs(t0[0].clientX - lineRect.left) < 24;
+}, { passive:true });
+
+vp.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t1 = Array.from(e.touches);
+  if (touchReveal && t1.length===1) {
+    const rect = vp.getBoundingClientRect();
+    setRevealX(t1[0].clientX - rect.left);
+    return;
+  }
+  if (t1.length===1 && t0.length>=1) {
+    setTransform(scale, tx+t1[0].clientX-t0[0].clientX, ty+t1[0].clientY-t0[0].clientY);
+  } else if (t1.length===2 && t0.length===2) {
+    const d0 = Math.hypot(t0[0].clientX-t0[1].clientX, t0[0].clientY-t0[1].clientY);
+    const d1 = Math.hypot(t1[0].clientX-t1[1].clientX, t1[0].clientY-t1[1].clientY);
+    const cx = (t1[0].clientX+t1[1].clientX)/2 - vp.getBoundingClientRect().left;
+    const cy = (t1[0].clientY+t1[1].clientY)/2 - vp.getBoundingClientRect().top;
+    const f = d1/d0;
+    setTransform(scale*f, cx-(cx-tx)*f, cy-(cy-ty)*f);
+  }
+  t0 = t1;
+}, { passive:false });
+
+// ── Buttons ───────────────────────────────────────────────────
+document.getElementById('btnReveal').addEventListener('click', () => {
+  enableReveal(!revealActive);
+});
+
+document.getElementById('btnLabels').addEventListener('click', () => {
+  const on = imgLabels.style.opacity !== '0';
+  imgLabels.style.opacity = on ? '0' : '1';
+  document.getElementById('btnLabels').textContent = on ? 'Labels Off' : 'Labels On';
+  document.getElementById('btnLabels').classList.toggle('on', !on);
+});
+
+document.getElementById('btnReset').addEventListener('click', fitView);
+
+document.getElementById('btnAlign').addEventListener('click', () => {
+  const vis = alignPanel.style.display === 'block';
+  alignPanel.style.display = vis ? 'none' : 'block';
+  document.getElementById('btnAlign').classList.toggle('on', !vis);
+});
+
+// ── Alignment panel controls ──────────────────────────────────
+function linkAlignSlider(id, valId, unit, prop, scale_) {
+  const sl = document.getElementById(id);
+  const vl = document.getElementById(valId);
+  sl.addEventListener('input', () => {
+    align[prop] = +sl.value;
+    vl.textContent = sl.value + unit;
+    applyAlign();
+  });
+}
+linkAlignSlider('aX','aXv',' px','x');
+linkAlignSlider('aY','aYv',' px','y');
+linkAlignSlider('aS','aSv','%','s');
+linkAlignSlider('aR','aRv','°','r');
+
+document.getElementById('alignReset').addEventListener('click', () => {
+  align = { x:0, y:0, s:79, r:0 };
+  document.getElementById('aX').value = 0;  document.getElementById('aXv').textContent = '0 px';
+  document.getElementById('aY').value = 0;  document.getElementById('aYv').textContent = '0 px';
+  document.getElementById('aS').value = 79; document.getElementById('aSv').textContent = '79%';
+  document.getElementById('aR').value = 0;  document.getElementById('aRv').textContent = '0°';
+  applyAlign();
+});
+
+// ── Init ──────────────────────────────────────────────────────
+applyAlign();
+enableReveal(true);
+window.addEventListener('resize', () => {
+  if (revealActive) setRevealX(vp.clientWidth/2);
+});
+</script>
+</body>
+</html>

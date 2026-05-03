@@ -66,6 +66,7 @@ body {
 #hist-clip {
   position:absolute;
   top:0;left:0;
+  width:50%;
   height:100%;
   overflow:hidden;
   pointer-events:none;
@@ -80,13 +81,13 @@ body {
 #reveal-line {
   position:absolute;
   top:0;
+  left:50%;
   width:3px;
   height:100%;
   background:#fff;
   cursor:ew-resize;
   z-index:50;
   box-shadow:0 0 8px rgba(0,0,0,.8);
-  display:none;
 }
 #reveal-grip {
   position:absolute;
@@ -115,7 +116,6 @@ body {
   border-radius:20px;
   pointer-events:none;
   z-index:40;
-  display:none;
 }
 #tag-hist { left:12px; }
 #tag-new  { right:12px; }
@@ -279,12 +279,17 @@ function setRevealX(x) {
 
 function enableReveal(on) {
   revealActive = on;
-  revealLine.style.display  = on ? 'block' : 'none';
-  tagHist.style.display     = on ? 'block' : 'none';
-  tagNew.style.display      = on ? 'block' : 'none';
-  histClip.style.width      = on ? revealX + 'px' : '100%';
+  revealLine.style.display = on ? '' : 'none';
+  tagHist.style.display    = on ? '' : 'none';
+  tagNew.style.display     = on ? '' : 'none';
   document.getElementById('btnReveal').classList.toggle('on', on);
-  if (on) setRevealX(revealX || vp.clientWidth/2);
+  if (on) {
+    // If revealX was never set by JS, read from the line's rendered position
+    if (!revealX) revealX = revealLine.getBoundingClientRect().left - vp.getBoundingClientRect().left;
+    setRevealX(revealX);
+  } else {
+    histClip.style.width = '100%';
+  }
 }
 
 // ── Mouse wheel zoom ──────────────────────────────────────────
@@ -408,7 +413,8 @@ document.getElementById('alignReset').addEventListener('click', () => {
 
 // ── Init ──────────────────────────────────────────────────────
 applyAlign();
-window.addEventListener('load', () => enableReveal(true));
+
+// Sync revealX from CSS initial state (50%) once layout is known
 window.addEventListener('resize', () => {
   if (revealActive) setRevealX(vp.clientWidth / 2);
 });
